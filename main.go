@@ -133,40 +133,7 @@ func formatSimpleResult(order []string, counts map[string]int, firstOccurrence m
 }
 
 // processLines обрабатывает строки согласно опциям -f, -s, -i
-func processLines(lines []string, opts Options) []LineInfo {
-    result := make([]LineInfo, len(lines))
 
-    for i, line := range lines {
-        processed := line
-
-        // Применяем -f (игнорируем первые num_fields полей)
-        if opts.NumFields > 0 {
-            processed = skipFields(processed, opts.NumFields)
-        }
-
-        // Применяем -s (игнорируем первые num_chars символов)
-        if opts.NumChars > 0 {
-            if len(processed) > opts.NumChars {
-                processed = processed[opts.NumChars:]
-            } else {
-                processed = "" // Пустая строка для группировки
-            }
-        }
-
-        // Применяем -i (игнорируем регистр)
-        if opts.IgnoreCase {
-            processed = strings.ToLower(processed)
-        }
-
-        result[i] = LineInfo{
-            Original:  line,
-            Processed: processed,
-            Index:     i,
-        }
-    }
-
-    return result
-}
 
 // skipFields пропускает первые n полей в строке
 func skipFields(line string, n int) string {
@@ -184,90 +151,18 @@ func skipFields(line string, n int) string {
 }
 
 // groupLines группирует одинаковые строки
-func groupLines(lines []LineInfo) map[string][]LineInfo {
-	groups := make(map[string][]LineInfo)
 
-	for _, line := range lines {
-		key := line.Processed
-		groups[key] = append(groups[key], line)
-	}
-
-	return groups
-}
 
 // formatResult форматирует результат согласно опциям
 
-func formatResult(groups map[string][]LineInfo, opts Options) []string {
-    // Если нет групп, возвращаем пустой слайс (не nil)
-    if len(groups) == 0 {
-        return []string{}
-    }
-
-    var result []string
-
-    // Собираем все группы для сортировки по первоначальному порядку
-    sortedGroups := getSortedGroups(groups)
-
-    for _, group := range sortedGroups {
-        result = appendGroupResult(result, group, opts)
-    }
-
-    return result
-}
 
 // getSortedGroups возвращает группы, отсортированные по индексу первой строки
-func getSortedGroups(groups map[string][]LineInfo) [][]LineInfo {
-    var sortedGroups [][]LineInfo
-    for _, group := range groups {
-        sortedGroups = append(sortedGroups, group)
-    }
 
-    // Сортируем группы по индексу первой строки
-    sort.Slice(sortedGroups, func(i, j int) bool {
-        return sortedGroups[i][0].Index < sortedGroups[j][0].Index
-    })
-
-    return sortedGroups
-}
 
 // appendGroupResult добавляет результат для одной группы согласно опциям
-func appendGroupResult(result []string, group []LineInfo, opts Options) []string {
-    count := len(group)
-    originalLine := group[0].Original
 
-    switch {
-    case opts.Count:
-        // -c: выводим количество и строку
-        result = append(result, formatCountLine(count, originalLine))
-
-    case opts.Duplicate:
-        // -d: выводим только дубликаты
-        if count > 1 {
-            result = append(result, originalLine)
-        }
-
-    case opts.Unique:
-        // -u: выводим только уникальные строки
-        if count == 1 {
-            result = append(result, originalLine)
-        }
-
-    default:
-        // Без параметров: выводим только первую строку из группы
-        result = append(result, originalLine)
-    }
-
-    return result
-}
 
 // formatCountLine форматирует строку с количеством
-func formatCountLine(count int, line string) string {
-    // Особый случай: если count 1 и строка пустая, выводим только число
-    if line == "" && count == 1 {
-        return formatCount(count)
-    }
-    return formatCount(count) + " " + line
-}
 
 // formatCount форматирует число для вывода
 func formatCount(count int) string {
