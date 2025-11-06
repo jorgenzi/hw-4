@@ -64,6 +64,7 @@ type LineInfo struct {
 }
 
 // Uniq выполняет уникализацию строк согласно опциям
+// Uniq выполняет уникализацию строк согласно опциям
 func Uniq(lines []string, opts Options) ([]string, error) {
     if err := opts.Validate(); err != nil {
         return nil, err
@@ -73,24 +74,52 @@ func Uniq(lines []string, opts Options) ([]string, error) {
         return []string{}, nil
     }
 
-    // Простая реализация без сложной логики
+    // Используем map для отслеживания первого вхождения каждой обработанной строки
+    seen := make(map[string]bool)
+    var result []string
     counts := make(map[string]int)
-    order := make([]string, 0)
     firstOccurrence := make(map[string]string)
 
+    // Первый проход: подсчет и определение первого вхождения
+    for _, line := range lines {
+        key := getProcessedKey(line, opts)
+        counts[key]++
+        if _, exists := firstOccurrence[key]; !exists {
+            firstOccurrence[key] = line
+        }
+    }
+
+    // Второй проход: сохранение порядка и формирование результата
+    seenKeys := make(map[string]bool)
     for _, line := range lines {
         key := getProcessedKey(line, opts)
         
-        if _, exists := firstOccurrence[key]; !exists {
-            firstOccurrence[key] = line
-            order = append(order, key)
+        if seenKeys[key] {
+            continue
         }
-        counts[key]++
+        seenKeys[key] = true
+
+        count := counts[key]
+        original := firstOccurrence[key]
+
+        switch {
+        case opts.Count:
+            result = append(result, formatCount(count)+" "+original)
+        case opts.Duplicate:
+            if count > 1 {
+                result = append(result, original)
+            }
+        case opts.Unique:
+            if count == 1 {
+                result = append(result, original)
+            }
+        default:
+            result = append(result, original)
+        }
     }
 
-    return formatSimpleResult(order, counts, firstOccurrence, opts), nil
+    return result, nil
 }
-
 func getProcessedKey(line string, opts Options) string {
     processed := line
 
