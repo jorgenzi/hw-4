@@ -63,7 +63,7 @@ type LineInfo struct {
 	Index     int
 }
 
-// Uniq выполняет уникализацию строк согласно опциям
+
 // Uniq выполняет уникализацию строк согласно опциям
 func Uniq(lines []string, opts Options) ([]string, error) {
     if err := opts.Validate(); err != nil {
@@ -74,8 +74,9 @@ func Uniq(lines []string, opts Options) ([]string, error) {
         return []string{}, nil
     }
 
-    // Используем map для отслеживания первого вхождения каждой обработанной строки
-    seen := make(map[string]bool)
+    // УДАЛИТЬ эту строку:
+    // seen := make(map[string]bool)
+    
     var result []string
     counts := make(map[string]int)
     firstOccurrence := make(map[string]string)
@@ -120,6 +121,8 @@ func Uniq(lines []string, opts Options) ([]string, error) {
 
     return result, nil
 }
+
+
 func getProcessedKey(line string, opts Options) string {
     processed := line
 
