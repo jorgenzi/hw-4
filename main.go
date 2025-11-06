@@ -66,63 +66,121 @@ type LineInfo struct {
 
 // Uniq выполняет уникализацию строк согласно опциям
 func Uniq(lines []string, opts Options) ([]string, error) {
-	if err := opts.Validate(); err != nil {
-		return nil, err
-	}
+    if err := opts.Validate(); err != nil {
+        return nil, err
+    }
 
-	// Обрабатываем строки
-	processed := processLines(lines, opts)
+    if len(lines) == 0 {
+        return []string{}, nil
+    }
 
-	// Группируем строки
-	groups := groupLines(processed)
+    // Простая реализация без сложной логики
+    counts := make(map[string]int)
+    order := make([]string, 0)
+    firstOccurrence := make(map[string]string)
 
-	// Формируем результат согласно опциям
-	return formatResult(groups, opts), nil
+    for _, line := range lines {
+        key := getProcessedKey(line, opts)
+        
+        if _, exists := firstOccurrence[key]; !exists {
+            firstOccurrence[key] = line
+            order = append(order, key)
+        }
+        counts[key]++
+    }
+
+    return formatSimpleResult(order, counts, firstOccurrence, opts), nil
+}
+
+func getProcessedKey(line string, opts Options) string {
+    processed := line
+
+    if opts.NumFields > 0 {
+        processed = skipFields(processed, opts.NumFields)
+    }
+
+    if opts.NumChars > 0 && len(processed) > opts.NumChars {
+        processed = processed[opts.NumChars:]
+    }
+
+    if opts.IgnoreCase {
+        processed = strings.ToLower(processed)
+    }
+
+    return processed
+}
+
+func formatSimpleResult(order []string, counts map[string]int, firstOccurrence map[string]string, opts Options) []string {
+    var result []string
+
+    for _, key := range order {
+        count := counts[key]
+        original := firstOccurrence[key]
+
+        switch {
+        case opts.Count:
+            result = append(result, formatCount(count)+" "+original)
+        case opts.Duplicate && count > 1:
+            result = append(result, original)
+        case opts.Unique && count == 1:
+            result = append(result, original)
+        case !opts.Duplicate && !opts.Unique && !opts.Count:
+            result = append(result, original)
+        }
+    }
+
+    return result
 }
 
 // processLines обрабатывает строки согласно опциям -f, -s, -i
 func processLines(lines []string, opts Options) []LineInfo {
-	result := make([]LineInfo, len(lines))
+    result := make([]LineInfo, len(lines))
 
-	for i, line := range lines {
-		processed := line
+    for i, line := range lines {
+        processed := line
 
-		// Применяем -f (игнорируем первые num_fields полей)
-		if opts.NumFields > 0 {
-			processed = skipFields(processed, opts.NumFields)
-		}
+        // Применяем -f (игнорируем первые num_fields полей)
+        if opts.NumFields > 0 {
+            processed = skipFields(processed, opts.NumFields)
+        }
 
-		// Применяем -s (игнорируем первые num_chars символов)
-		if opts.NumChars > 0 {
-			if len(processed) > opts.NumChars {
-				processed = processed[opts.NumChars:]
-			} else {
-				processed = ""
-			}
-		}
+        // Применяем -s (игнорируем первые num_chars символов)
+        if opts.NumChars > 0 {
+            if len(processed) > opts.NumChars {
+                processed = processed[opts.NumChars:]
+            } else {
+                processed = "" // Пустая строка для группировки
+            }
+        }
 
-		// Применяем -i (игнорируем регистр)
-		if opts.IgnoreCase {
-			processed = strings.ToLower(processed)
-		}
+        // Применяем -i (игнорируем регистр)
+        if opts.IgnoreCase {
+            processed = strings.ToLower(processed)
+        }
 
-		result[i] = LineInfo{
-			Original:  line,
-			Processed: processed,
-			Index:     i,
-		}
-	}
+        result[i] = LineInfo{
+            Original:  line,
+            Processed: processed,
+            Index:     i,
+        }
+    }
 
-	return result
+    return result
 }
 
 // skipFields пропускает первые n полей в строке
 func skipFields(line string, n int) string {
-	fields := strings.Fields(line)
-	if n >= len(fields) {
-		return ""
-	}
-	return strings.Join(fields[n:], " ")
+    if n <= 0 {
+        return line
+    }
+    
+    fields := strings.Fields(line)
+    if n >= len(fields) {
+        // Для пустых строк или когда полей меньше n - возвращаем оригинал
+        // чтобы сохранить возможность группировки
+        return line
+    }
+    return strings.Join(fields[n:], " ")
 }
 
 // groupLines группирует одинаковые строки
@@ -204,7 +262,11 @@ func appendGroupResult(result []string, group []LineInfo, opts Options) []string
 
 // formatCountLine форматирует строку с количеством
 func formatCountLine(count int, line string) string {
-	return formatCount(count) + " " + line
+    // Особый случай: если count 1 и строка пустая, выводим только число
+    if line == "" && count == 1 {
+        return formatCount(count)
+    }
+    return formatCount(count) + " " + line
 }
 
 // formatCount форматирует число для вывода
