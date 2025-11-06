@@ -138,7 +138,7 @@ func groupLines(lines []LineInfo) map[string][]LineInfo {
 }
 
 // formatResult форматирует результат согласно опциям
-// formatResult форматирует результат согласно опциям
+
 func formatResult(groups map[string][]LineInfo, opts Options) []string {
     // Если нет групп, возвращаем пустой слайс (не nil)
     if len(groups) == 0 {
@@ -148,6 +148,17 @@ func formatResult(groups map[string][]LineInfo, opts Options) []string {
     var result []string
 
     // Собираем все группы для сортировки по первоначальному порядку
+    sortedGroups := getSortedGroups(groups)
+
+    for _, group := range sortedGroups {
+        result = appendGroupResult(result, group, opts)
+    }
+
+    return result
+}
+
+// getSortedGroups возвращает группы, отсортированные по индексу первой строки
+func getSortedGroups(groups map[string][]LineInfo) [][]LineInfo {
     var sortedGroups [][]LineInfo
     for _, group := range groups {
         sortedGroups = append(sortedGroups, group)
@@ -158,31 +169,34 @@ func formatResult(groups map[string][]LineInfo, opts Options) []string {
         return sortedGroups[i][0].Index < sortedGroups[j][0].Index
     })
 
-    for _, group := range sortedGroups {
-        count := len(group)
-        originalLine := group[0].Original
+    return sortedGroups
+}
 
-        switch {
-        case opts.Count:
-            // -c: выводим количество и строку
-            result = append(result, formatCountLine(count, originalLine))
+// appendGroupResult добавляет результат для одной группы согласно опциям
+func appendGroupResult(result []string, group []LineInfo, opts Options) []string {
+    count := len(group)
+    originalLine := group[0].Original
 
-        case opts.Duplicate:
-            // -d: выводим только дубликаты
-            if count > 1 {
-                result = append(result, originalLine)
-            }
+    switch {
+    case opts.Count:
+        // -c: выводим количество и строку
+        result = append(result, formatCountLine(count, originalLine))
 
-        case opts.Unique:
-            // -u: выводим только уникальные строки
-            if count == 1 {
-                result = append(result, originalLine)
-            }
-
-        default:
-            // Без параметров: выводим только первую строку из группы
+    case opts.Duplicate:
+        // -d: выводим только дубликаты
+        if count > 1 {
             result = append(result, originalLine)
         }
+
+    case opts.Unique:
+        // -u: выводим только уникальные строки
+        if count == 1 {
+            result = append(result, originalLine)
+        }
+
+    default:
+        // Без параметров: выводим только первую строку из группы
+        result = append(result, originalLine)
     }
 
     return result
@@ -238,56 +252,73 @@ func WriteLines(writer io.Writer, lines []string) error {
 }
 
 func main() {
-	opts, inputFile, outputFile, err := parseFlags()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Ошибка: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Использование: uniq [-c | -d | -u] [-i] [-f num] [-s chars] [input_file [output_file]]\n")
-		os.Exit(1)
-	}
+    opts, inputFile, outputFile, err := parseFlags()
+    if err != nil {
+        showUsage(err)
+        os.Exit(1)
+    }
 
-	// Открываем входной файл или используем stdin
-	var input io.Reader = os.Stdin
-	if inputFile != "" {
-		file, err := os.Open(inputFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Ошибка открытия файла %s: %v\n", inputFile, err)
-			os.Exit(1)
-		}
-		defer file.Close()
-		input = file
-	}
+    input := getInputReader(inputFile)
+    output := getOutputWriter(outputFile)
 
-	// Читаем строки
-	lines, err := ReadLines(input)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Ошибка чтения: %v\n", err)
-		os.Exit(1)
-	}
+    processUniq(input, output, opts)
+}
 
-	// Выполняем уникализацию
-	result, err := Uniq(lines, opts)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Ошибка обработки: %v\n", err)
-		os.Exit(1)
-	}
+// showUsage показывает сообщение об ошибке и использование
+func showUsage(err error) {
+    fmt.Fprintf(os.Stderr, "Ошибка: %v\n", err)
+    fmt.Fprintf(os.Stderr, "Использование: uniq [-c | -d | -u] [-i] [-f num] [-s chars] [input_file [output_file]]\n")
+}
 
-	// Открываем выходной файл или используем stdout
-	var output io.Writer = os.Stdout
-	if outputFile != "" {
-		file, err := os.Create(outputFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Ошибка создания файла %s: %v\n", outputFile, err)
-			os.Exit(1)
-		}
-		defer file.Close()
-		output = file
-	}
+// getInputReader возвращает reader для ввода
+func getInputReader(inputFile string) io.Reader {
+    if inputFile == "" {
+        return os.Stdin
+    }
 
-	// Записываем результат
-	if err := WriteLines(output, result); err != nil {
-		fmt.Fprintf(os.Stderr, "Ошибка записи: %v\n", err)
-		os.Exit(1)
-	}
+    file, err := os.Open(inputFile)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Ошибка открытия файла %s: %v\n", inputFile, err)
+        os.Exit(1)
+    }
+    return file
+}
+
+// getOutputWriter возвращает writer для вывода
+func getOutputWriter(outputFile string) io.Writer {
+    if outputFile == "" {
+        return os.Stdout
+    }
+
+    file, err := os.Create(outputFile)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Ошибка создания файла %s: %v\n", outputFile, err)
+        os.Exit(1)
+    }
+    return file
+}
+
+// processUniq обрабатывает уникализацию
+func processUniq(input io.Reader, output io.Writer, opts Options) {
+    // Читаем строки
+    lines, err := ReadLines(input)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Ошибка чтения: %v\n", err)
+        os.Exit(1)
+    }
+
+    // Выполняем уникализацию
+    result, err := Uniq(lines, opts)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Ошибка обработки: %v\n", err)
+        os.Exit(1)
+    }
+
+    // Записываем результат
+    if err := WriteLines(output, result); err != nil {
+        fmt.Fprintf(os.Stderr, "Ошибка записи: %v\n", err)
+        os.Exit(1)
+    }
 }
 
 // parseFlags разбирает аргументы командной строки
